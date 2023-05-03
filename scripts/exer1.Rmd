@@ -1,0 +1,5 @@
+
+load a .csv file
+perform some analysis on the data (e.g., mean; sd) 
+optional: visualize the data
+provide text to describe the data
