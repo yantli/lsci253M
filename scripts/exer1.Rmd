@@ -1,5 +1,43 @@
+---
+title: "exer1"
+author: "yanting"
+date: "2023-05-03"
+output: html_document
+---
 
-load a .csv file
-perform some analysis on the data (e.g., mean; sd) 
-optional: visualize the data
-provide text to describe the data
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r loading library}
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+```
+
+
+# load a .csv file
+
+This is to load the sample_data.csv from "data" folder
+
+```{r loading in data}
+data <- read_csv("/Users/yanting/Documents/UCI/2023_Spring/Experiment_methods/lsci253M/data/sample_data.csv")
+head(data)
+```
+
+# perform some analysis on the data (e.g., mean; sd)
+
+This is to calculate the mean duration
+
+```{r duration, echo=TRUE}
+mean(data$Duration)
+```
+
+This is to calculate the sd of duration
+
+```{r duration, echo=TRUE}
+sd(data$Duration)
+```
+
+# visualize the data
+
