@@ -9,35 +9,89 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-```{r loading library}
+```{r loading library, echo = TRUE}
 library(tidyverse)
 library(dplyr)
+library(showtext)
+showtext_auto()
+library(lme4)
+library(lmerTest)
 library(ggplot2)
+library(poolr)
+library(ggrepel)
 ```
 
 
 # load a .csv file
 
-This is to load the sample_data.csv from "data" folder
+This is to create a function that help us load in .csv data files.
+col_names defines the columns of the data frame. Among them we want line_num and word_form are categorical variables.
 
-```{r loading in data}
-data <- read_csv("/Users/yanting/Documents/UCI/2023_Spring/Experiment_methods/lsci253M/data/sample_data.csv")
-head(data)
+```{r define data loading function, echo=TRUE}
+load_data <- function(file) {
+  logprob <- read_delim(file, locale=locale(encoding="UTF-8"), 
+                       col_names = c("target_word",
+                                     "concept",
+                                     "word_form",
+                                     "target_word_logprob",
+                                     "disj_logprob",
+                                     "line_num"))
+  logprob$line_num <- as.factor(logprob$line_num)
+  logprob$word_form <- as.factor(logprob$word_form)
+  return(logprob)
+}
+```
+
+This is to load the .csv data file from data/ folder. 
+
+```{r loading in data, echo=TRUE}
+data <- load_data("/Users/yanting/Documents/UCI/2023_Spring/Experiment_methods/lsci253M/data/prob_oldpairfilled2-200.csv")
 ```
 
 # perform some analysis on the data (e.g., mean; sd)
 
-This is to calculate the mean duration
+This is to create a new data frame that contains the average target word surprisal and average concept surprisal for each target word.
 
-```{r duration, echo=TRUE}
-mean(data$Duration)
+```{r re-framing data, echo=TRUE}
+means = data %>% group_by(target_word, concept, word_form) %>% summarize(concept_surprisal=-mean(disj_logprob), target_word_surprisal=-mean(target_word_logprob)) %>% ungroup() 
+
 ```
 
-This is to calculate the sd of duration
+This is to create a new data frame where each row contains the 1) concept, 2) average concept surprisal when the concept appears as the long form, and 3) average concept surprisal when the concept appears as the short form
 
-```{r duration, echo=TRUE}
-sd(data$Duration)
+```{r re-framing data for t test, echo=TRUE}
+t_test_data <- means %>% select(-target_word, -target_word_surprisal) %>% spread(word_form, concept_surprisal)
 ```
+
 
 # visualize the data
+
+This is to create the right data frame for plotting the data
+
+```{r creating df for plot, echo=TRUE}
+diffline <- t_test_data %>% 
+  mutate(diff = long - short) %>% mutate(above_zero = if_else(diff > 0, "above 0", "below 0")) %>% mutate(long_sur = long) %>% 
+  group_by(concept) %>%
+  pivot_longer(cols = c("long", "short"), names_to = "form", values_to = "surprisal")  %>% arrange(long_sur)
+```
+
+This is to plot the average estimated surprisal of both long and short form for each of the 100 concepts. For each concept, there is a solid circle representing the long form and a hollow circle representing the short form. Each pair of circles are connected by a solid line showing the difference between the surprisal of the two forms (long - short). If the difference is negative, the line is colored red. Otherwise it is colored blue.
+
+```{r plot, echo=TRUE}
+diffline %>%
+  ggplot(aes(x = reorder(concept, long_sur, mean), y = surprisal, group = concept)) +
+  geom_point(aes(shape = form), size = 3) + 
+  geom_line(aes(color = above_zero), size = 0.5) + 
+  scale_shape_manual(values = c(16, 1)) +
+  scale_color_manual(values = c("blue", "red")) +
+  theme_classic() +
+  labs(y = "Surprisal", x = 'Concept (represented by the short forms)', color = "Surprisal difference \n (long - short)", shape = "Word form") +
+  theme(axis.ticks.x = element_blank(), axis.text.x = element_text(angle = 90, hjust = 1)) + 
+  scale_x_discrete(labels = function(x) diffline$concept[match(x, diffline$concept)])
+
+``` 
+
+# provide text to describe the data
+As we can see from the plot, among the 100 concepts sampled, 63 have a blue line, indicating that the majority of the long forms tend to have higher surprisal than their short counterpart, which means that the long forms tend to contain more information in general. 
+
 
