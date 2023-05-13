@@ -1,0 +1,79 @@
+---
+title: "exer1"
+author: "yanting"
+date: "2023-05-12"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r loading library, echo = TRUE}
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+```
+
+Loading data
+```{r loading in data, echo=TRUE}
+data <- read_csv("/Users/yanting/Documents/UCI/2023_Spring/Experiment_methods/lsci253M/data/example_data_for_visualization.csv")
+head(data)
+unique(data$pos)
+```
+
+Trying to plot the vot distribution of different consonants according to their place of articulation:
+
+```{r boxplot, echo=TRUE}
+boxplot_data <- select(data,
+                    subj,
+                   gender,
+                   vot, 
+                   poa)
+
+ggplot(boxplot_data, aes(x = poa, y = vot, fill = poa)) +
+  geom_boxplot() +
+  scale_fill_manual(values = c("orange", "lightblue", "pink")) +
+  labs(y = "vot", x = "poa")
+
+```
+
+Trying to plot the histogram of words with different number of syllables for each consonant:
+
+```{r histogram, echo=TRUE}
+histogram_data <- select(data,
+                   stop,
+                   syll)
+
+histogram_data_count <- histogram_data %>% 
+  group_by(stop, syll) %>%
+  summarize(count = n())
+
+ggplot(histogram_data_count, aes(x = stop, fill = syll)) + 
+  geom_bar(position = "dodge") +
+  labs(x = "stop", y = "count of words", fill = "number of syllables") 
+
+
+```
+
+Trying to create a scatter plot for the usef0 for different vowels produced by speakers of different genders:
+
+```{r scatterplot, echo=TRUE}
+scatterplot_data <- select(data,
+                          subj,
+                          gender,
+                          vowel,
+                          usef0)
+
+scatterplot_data_grouped <- group_by(
+  scatterplot_data, gender, vowel
+)
+scatterplot_data <- summarize(scatterplot_data_grouped, f0 = mean(usef0, na.rm = TRUE))
+
+ggplot(scatterplot_data, aes(x = vowel, y = f0, color = vowel)) + 
+  geom_point(pos = position_dodge(width = 0.5), size = 1) +
+  facet_wrap(~gender) +
+  labs(x = "vowel", y = "f0")
+```
+
+I feel that this visualization is not very informative though... looking forward to learning more about how to effectively present data!
