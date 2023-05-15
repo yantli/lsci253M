@@ -1,5 +1,5 @@
 ---
-title: "exer1"
+title: "data visualization"
 author: "yanting"
 date: "2023-05-12"
 output: html_document
@@ -17,7 +17,7 @@ library(ggplot2)
 
 Loading data
 ```{r loading in data, echo=TRUE}
-data <- read_csv("/Users/yanting/Documents/UCI/2023_Spring/Experiment_methods/lsci253M/data/example_data_for_visualization.csv")
+data <- read_csv("../data/example_data_for_visualization.csv")
 head(data)
 unique(data$pos)
 ```
