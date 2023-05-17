@@ -30,20 +30,25 @@ boxplot_data <- select(data,
                    gender,
                    vot, 
                    poa)
+boxplot_data$poa <- factor(boxplot_data$poa , levels = c("lab", "cor", "dor"))
 
 ggplot(boxplot_data, aes(x = poa, y = vot, fill = poa)) +
   geom_boxplot() +
   scale_fill_manual(values = c("orange", "lightblue", "pink")) +
-  labs(y = "vot", x = "poa")
+  theme(legend.position = "none") +
+  scale_x_discrete(labels = c("labial", "coronal", "dorsal")) + 
+  labs(y = "vot", x = "place of articulation", caption = "Vot of different stops plotted according to the place of articulation. The first quartile, the median and the third quartile are shown.") + 
+  theme(plot.caption = element_text(hjust = 0.5))
 
 ```
 
-Trying to plot the histogram of words with different number of syllables for each consonant:
+Trying to plot the histogram of words with different number of syllables for each consonant (and I just realized that this is probably controlled for after seeing the plot...):
 
 ```{r histogram, echo=TRUE}
 histogram_data <- select(data,
                    stop,
                    syll)
+histogram_data$syll <- factor(histogram_data$syll, levels = c("one", "two", "more"))
 
 histogram_data_count <- histogram_data %>% 
   group_by(stop, syll) %>%
@@ -51,14 +56,16 @@ histogram_data_count <- histogram_data %>%
 
 ggplot(histogram_data_count, aes(x = stop, fill = syll)) + 
   geom_bar(position = "dodge") +
-  labs(x = "stop", y = "count of words", fill = "number of syllables") 
-
+  scale_y_continuous(breaks = 0:2) + 
+  scale_fill_manual(values = c("lightblue", "royalblue", "darkblue")) +
+  labs(x = "stop", y = "count of words", fill = "number of syllables", caption = "Count of words with one, two or more syllables, grouped by the stop.") + 
+  theme(plot.caption = element_text(hjust = 0.5))
 
 ```
 
 Trying to create a scatter plot for the usef0 for different vowels produced by speakers of different genders:
 
-```{r scatterplot, echo=TRUE}
+```{r scatterplot, fig.width=10, fig.height = 4, echo=TRUE}
 scatterplot_data <- select(data,
                           subj,
                           gender,
@@ -72,8 +79,10 @@ scatterplot_data <- summarize(scatterplot_data_grouped, f0 = mean(usef0, na.rm =
 
 ggplot(scatterplot_data, aes(x = vowel, y = f0, color = vowel)) + 
   geom_point(pos = position_dodge(width = 0.5), size = 1) +
-  facet_wrap(~gender) +
-  labs(x = "vowel", y = "f0")
-```
+  theme(legend.position = "none") +
+  facet_wrap(~gender, labeller = labeller(facet_var = c("F" = "Female", "M" = "Male"))) +
+  labs(x = "vowel", y = "f0", caption = "Average f0 of each vowel produced by female vs. male speakers.") + 
+  theme(plot.caption = element_text(hjust = 0.5)) 
 
-I feel that this visualization is not very informative though... looking forward to learning more about how to effectively present data!
+```
+Ideally it would be nice to rename the variables on the x axis with the IPA of each vowel but I am not sure about what exact vowels they represent, so they are left as is for now.
