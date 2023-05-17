@@ -6,7 +6,7 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = FALSE)
 ```
 
 ```{r loading library, echo = TRUE}
@@ -86,3 +86,26 @@ ggplot(scatterplot_data, aes(x = vowel, y = f0, color = vowel)) +
 
 ```
 Ideally it would be nice to rename the variables on the x axis with the IPA of each vowel but I am not sure about what exact vowels they represent, so they are left as is for now.
+
+Trying to create a bar chart for the average vowel duration for different vowels:
+
+```{r barchart, echo=TRUE}
+bar_data <- select(data,
+                   vowel,
+                   vdur)
+bar_data_summary <- bar_data %>%
+  group_by(vowel) %>%
+  summarize(avg_duration = mean(vdur),
+            sd_duration = sd(vdur),
+            n = n()) 
+
+ggplot(bar_data_summary, aes(x = reorder(vowel, avg_duration), y = avg_duration, fill = vowel)) +
+  geom_bar(stat = "identity") +
+  geom_errorbar(aes(ymin = avg_duration - sd_duration,
+                    ymax = avg_duration + sd_duration),
+                width = 0.4, color = "black", size = 0.7) +
+  theme(legend.position = "none") +
+  labs(x = "Vowel", y = "Duration", caption = "Vowel duration from short to long for each vowel with error bar.") + 
+  theme(plot.caption = element_text(hjust = 0.5))
+
+```
