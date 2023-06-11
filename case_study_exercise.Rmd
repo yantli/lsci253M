@@ -1,0 +1,343 @@
+---
+title: "case_study_RT_accuracy"
+author: "Yanting Li"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE, error=TRUE, cache = FALSE)
+```
+
+```{r libraries, include=FALSE}
+library(tidyverse)
+library(magrittr)
+library(lme4)
+library(lmerTest)
+
+```
+
+## Experiment design
+
+Describe the design of the experiment in your own words.
+
+The experiment consists of four phases: Practice, Exposure, Test, and Baseline. Among them, the Exposure Phase has 3 blocks whereas the other three phrases all have 1 block, so there are 6 blocks in total. Each block contains 6 trials. In each trial, participants will be asked to judge whether the word displayed on the computer screen (e.g., "bard") matches the final word of the sentence they hear (e.g., “Please reserve me a spot.”). 
+
+Participants are randomly split into two groups (Accent vs. Contro) and go through the four phases. The only difference between the two groups is the auditory material used for the Exposure Phrase. 
+
+In the Practice Phase, participants are familiarized with the task by listening to sentences produced by Native American English (AE) Talker 1. In the Exposure Phase, participants listens to either a) Mandarin accented Talker 1 (for Accent group), or b) Native AE Talker (for Control group) 2. In the Test Phase, all participants listen to Mandarin accented Talker 1. Finally, in the Baseline Phase, all participants listens to Native AE Talker 1 again. The purpose of this phase is to capture changes in performance due to task practice effect so inter-participant variability can be corrected.
+
+```{r load-data}
+d.all <- read.csv(file = "data/xie_data_full.csv") %>%
+  select(PartOfExp, Trial, Filename, Word, Response, RT, WorkerId, Condition, List, Speaker, VisualProbeType, Error, CorrectResponse, Block, BaselineRT, ListOrder, ListID, Phase, subjMean_BlockRT, BaselineRT_raw) %>%
+   filter(Condition %in% 
+           c("Mandarin-accented English (same)",
+             "Control (native accent)" 
+         ))
+```
+
+## Data cleaning
+
+### 1. Examine RT distribution
+
+Examine the distribution of RT (subjMean_BlockRT) across subjects. Does it make sense?
+
+```{r distribution-of-subj-wise-mean-RTs-before-exclusions, fig.cap="Distribution of subjects mean RTs by Block and Condition, prior to outlier exclusions.\\label{fig:distribution-of-subj-wise-mean-RTs-before-exclusions}"}
+rt_dist <- d.all %>%
+  select(WorkerId, Condition, Block, subjMean_BlockRT)  %>%
+  distinct()
+  
+ggplot(rt_dist, aes(x = Block, y = subjMean_BlockRT, fill = Block)) +
+  geom_boxplot() +
+  facet_wrap(~ Condition) + 
+  theme(legend.position = "none") +
+  labs(y = "Subject mean RT", x = "Block") + 
+  theme(plot.caption = element_text(hjust = 0.5))
+
+```
+It seems that there is a very obvious outlier for the practice block and another potential outlier in the 4th block, both for the Accent group.
+
+## 2. Data exclusion
+
+Describe the procedure you take to exclude outliers (subjects, trials, etc.).
+
+### Exclusion by subject
+Describe your exclusion criteria based on a subject's performance.
+
+e.g., We want to identify and remove subjects who consistently registered slow response times because they did not perform the task faithfully (e.g., multi-tasking) or because their computer equipment did not provide reliable recording of RTs over the web. 
+
+We want to identify and remove subjects who consistently registered slow response times because they did not perform the task faithfully (e.g., multi-tasking) or because their computer equipment did not provide reliable recording of RTs over the web. In order to do that, we will look within conditions and exclude participants with overall mean RT (across all blocks) that is 3 standard deviation longer than the overall mean RT across all participants.
+
+
+```{r outlier-exclusion-subject}
+## ----------------------------------------
+# identify *eligible* subjects 
+subjOutliers <- d.all %>%
+  select(WorkerId, Block, Condition, subjMean_BlockRT)  %>%
+  distinct() %>% group_by(WorkerId, Condition) %>%
+  mutate(subjMean_RT = mean(subjMean_BlockRT)) %>%
+  ungroup() %>% group_by(Condition) %>%
+  mutate(subjSd_RT = sd(subjMean_BlockRT),
+         upper_limit = mean(subjMean_RT) + 3 * subjSd_RT) %>%
+  filter(subjMean_BlockRT > upper_limit)  
+
+# how many RT-based subject exclusions in total
+nrow(subjOutliers)
+
+# how many RT-based subject exclusions per Condition
+# For Accent group:
+sum(subjOutliers$Condition == "Mandarin-accented English (same)")
+# For Control group:
+sum(subjOutliers$Condition == "Control (native accent)")
+```
+
+Re-examine RT distribution after subject exclusion.
+
+```{r RT-distribution-after-outlier-removal-step1, fig.cap="...\\label{fig:RT-distribution-after-outlier-removal-step1}" }
+
+rt_dist <- rt_dist[!(rt_dist$WorkerId %in% subjOutliers$WorkerId), ]
+  
+ggplot(rt_dist, aes(x = Block, y = subjMean_BlockRT, fill = Block)) +
+  geom_boxplot() +
+  facet_wrap(~ Condition) + 
+  theme(legend.position = "none") +
+  labs(y = "Subject mean RT", x = "Block") + 
+  theme(plot.caption = element_text(hjust = 0.5))
+
+```
+
+### Exclusion by trial with extreme RTs
+
+The second step of outlier removal was to exclude trials with atypical RTs. Describe your exclusion criteria by trial and do a second round of exclusion.
+
+We want to identify and remove trials with exceptionally slow response times compared to the other trials in the same block because such trials might not be a result of a sudden interruption that is not related to the task. For each participant left in our dataset, we will look within each block and exclude trials with RT that is 3 standard deviation longer than the mean.
+
+```{r outlier-removal-step2.1, echo = FALSE}
+d.all2 <- d.all[!(d.all$WorkerId %in% subjOutliers$WorkerId), ]
+
+trialOutliers <- d.all2 %>%
+  select(WorkerId, Block, RT, Condition, subjMean_BlockRT)  %>%
+  group_by(WorkerId, Condition, Block) %>%
+  mutate(subjSd_BlockRT = sd(RT),
+         upper_limit = subjMean_BlockRT + 3 * subjSd_BlockRT) %>%
+  filter(RT > upper_limit)  
+  
+nrow(trialOutliers)
+
+```
+
+Q: Did trial-wise outlier exclusion disproportionately affect any experimental Conditions?
+
+Since nothing got excluded according to the step above, this procedure did not affect any experimental Conditions. 
+
+```{r outlier-removal-step2.3, echo = FALSE}
+```
+
+Q: Examine the mean RTs by block. Do they vary a lot before and after trial exclusion? Describe the effects.
+
+Since nothing got excluded according to the step above, this procedure did not have any effects on the mean RTs. (I am kind of confused by this result though - is this normal? I reconsidered my criteria, but still believe that each participants should be comparing with themselves, and within the same block only. I also think that we shouldn't go back and change our exclusion criteria just because it doesn't end up excluding anything, so I did not make a change here. However, this should be based on the fact that the original criteria makes sense, but I am not entirely sure if mine makes sense in the first place.)
+
+
+## Examine RTs and Accuracy during practice and baseline (after exclusion steps 1 and 2)
+
+Now that we've excluded extreme subject and trial outliers, we can look at the practice and baseline data to assess our high-level predictions about how participants should perform on this web-based task.
+
+1. **One data pattern that we expect to find is that performance (both RTs and accuracy) in the practice and baseline blocks is comparable across experimental conditions.** We expect this because these blocks of the experiment were identical across conditions (i.e., native-accented stimuli presented in the clear).
+    
+    + ... *if performance in the **practice block** differs substantially across conditions*, we would need to consider whether the subjects in each condition were sampled from the same underlying population (e.g., did we run all conditions at approximately the sme time of day?).
+
+    + ... *if performance in the **baseline block** differs substantially across conditions*, we would need to consider whether exposure to different types of speech during the main block of the experiment induced overall differences in task performance (in which case the baseline block doesn't provide a reliable condition-independent "baseline" for normalization purposes).
+
+2. **A second data pattern that we expect to find is evidence of improvement (adaptation) over the course of the task.** One way this would manifest is faster RTs and increased accuracy in the post-experiment baseline block, relative to the practice phase. 
+
+
+## Summary of exclusion criteria:\label{sec:summary-of-exclusion-criteria}
+
+- Participant-level exclusions:
+    + We looked at the overall mean RT across all blocks of each participant. If a participant, compared to others within the same Condition, has an overall mean RT that is obviously much higher (3 standard deviation from the mean), then we will exclude all data of this participant. 
+    
+    
+- Trial-level exclusions:
+    + For each participant, we will look within each block. If a trial, compared to other trials done by the same participant within the same block, has an RT that is obviously much higher (3 standard deviation from the mean), then we will exclude that trial from the block. 
+    
+(This is a question that arose from doing this case study: is there a convention about the order of conducting participant- vs. trial-level exclusions? I am curious because if a normal participant has one very extreme long trial for each trial, then it's possible that his/her overall mean RT will become an outlier, but if we exclude those trials first, his/her overall mean RT might be normal, right?) 
+
+We applied the same exclusion criteria across all RT and error analyses.
+
+## Normalize experimental RTs relative to baseline
+
+Now that we've completed all trial-wise RT exclusions, we can calculate _normalized_ RTs that take into account each subject's baseline speed on this task. For this procedure, we adjust the RTs on each trial by subtracting out the corresponding subject's mean RT during the baseline phase. We refer to the resulting measure as _adjusted RTs_.
+
+```{r, echo = TRUE}
+# calculate each subject's mean Baseline RT
+# and subtract that value from experimental RTs
+
+dat_out2 <- d.all2[!(d.all2$WorkerId %in% trialOutliers$WorkerId), ]
+
+dat_out2 %<>%
+  group_by(WorkerId) %>%
+  mutate(
+    # calculate subject-wise mean RTs during baseline block
+    meanBaselineRT = mean(RT[PartOfExp == "baseline"]),
+    
+    # calculate normalized RTs
+    AdjustedRT = RT - meanBaselineRT,
+    
+    # calculate subject-wise mean Adjusted RT across Blocks 1-4
+    meanAdjustedRT = mean(AdjustedRT[PartOfExp == "main"])
+  )
+```
+
+Now we want to check the distribution of adjuted RTs to make sure it seems reasonable, given our expectations about task performance.
+
+Note that we expect baseline RTs to be faster on average than RTs during the experimental block, regardless of exposure condition. We expect this for two reasons. First, the baseline task occurred at the end of the experiment, after participants had adapted to the task. Second, _all_ participants heard native accented speech during the baseline phase; hence, there was no need for accent adaptation during this phase.
+
+```{r, echo = TRUE}
+# ratio of negative meanAdjusted RTs among all meanAdjusted RTs
+nrow(filter(dat_out2, meanAdjustedRT<0))/nrow(dat_out2)
+
+```
+
+# Modeling strategy
+
+## Model building and assessment
+RTs were analyzed using linear mixed effects regression, as implemented in the lme4 package (version 1.1-10: Bates, Maechler, Bolker, \\& Walker, 2014) in R (R Core Team, 2014). Response accuracy (incorrect vs. correct response) was analyzed using mixed effects logistic regression (see Jaeger, 2008). All mixed effects models were specified with the maximal random effects structure justified by the experimental design: that is, by-subject and by-item random intercepts, by-subject random slopes for all design variables manipulated within subjects, and by-item random slopes for all design variables manipulated within items. If the definitionally maximal model failed to converge within ten thousand iterations, the model was systematically simplified in a step-wise fashion until the model converged. These steps involved removing correlations among random effects; dropping the random effects term with the least variance; and removing fixed effects that were inconsequential for the theory being tested (i.e., counterbalancing nuisance variables).
+
+## Variable coding
+Unless otherwise specified, all numeric predictors were centered and categorical predictors were coded as sum contrasts, in order to reduce collinearity among predictors. 
+
+```{r prep-lmer}
+
+# change to dat_out3 to implement 3rd outlier step
+dat <- dat_out2 %>%
+  filter(PartOfExp == "main") %>%
+  droplevels(.)
+
+## ------------------------------------------ 
+## Define contrast coding for analyses
+## ------------------------------------------ 
+
+dat <- within(dat %>%
+                mutate(Block = factor(Block)), {
+  # helmert coding for Block for C&G-style analysis
+  contrasts(Block) <- contr.helmert(4)
+})
+
+## ------------------------------------------ 
+## EXPERIMENT 1
+exp1 <- dat %>%
+  within(., {
+  # sum coding for accent condition
+  Condition <- factor(Condition)
+	contrasts(Condition) <- cbind("Accented" = c(1,-1))
+	
+	 # sum contrast code List (counterbalancing nuissance factor)
+	List <- factor(List)
+  contrasts(List) <- contr.sum(nlevels(List))
+  colnames(contrasts(List)) <- rownames(contrasts(List))[1:7]
+  
+  # sum code ListID
+  ListID <- factor(ListID)
+  contrasts(ListID) <- contr.sum(nlevels(ListID))
+
+  #sum code ListOrder
+  ListOrder <- factor(ListOrder)
+  contrasts(ListOrder) <- contr.sum(nlevels(ListOrder))
+})
+```
+
+
+# Experiment 1: Adaptation to Mandarin-accented English
+## Participants
+
+Examine the number of participants per condition.
+
+```{r examine-number-of-participants, echo=TRUE}
+
+# number of participants in the Accent group:
+nrow(exp1 %>% 
+  select(WorkerId, Condition) %>%
+  unique() %>%
+  filter(Condition == "Mandarin-accented English (same)"))
+
+# number of participants in the Control group:
+nrow(exp1 %>% 
+  select(WorkerId, Condition) %>%
+  unique() %>%
+  filter(Condition == "Control (native accent)"))
+
+```
+## Exp1 Response Times
+
+Visualize the changes of RTs across blocks by condition.
+
+```{r exp1-RTs-by-condition, fig.width = 11, fig.height = 5, fig.cap="Average RTs by exposure condition in Experiment 1.\\label{fig:exp1-RTs-by-condition}"}
+exp1viz <- exp1 %>%
+  select(WorkerId, Condition, Block, AdjustedRT) %>%
+  group_by(Condition, Block) %>%
+  mutate(meanAdj_BlockRT = mean(AdjustedRT),
+         sdAdj_BlockRT = sd(AdjustedRT)) 
+
+ggplot(exp1viz, aes(x = Block, y = meanAdj_BlockRT, color = Condition, group = Condition)) + 
+  geom_point() +
+  geom_line() +
+  theme(legend.position = "bottom") +
+  scale_color_discrete(labels = c("Control Group", "Accent Group")) +
+  labs(x = "Block", y = "mean adjusted RT per block")
+
+```
+
+We assess the effect of exposure condition (Mandarin-accented English vs. control) on processing speed separately for RTs during the exposure phase and the test phase. To assess the _change_ in RTs during the course of exposure, we split the 18-trial exposure phase into three blocks of 6 trials and use the resulting Block variable as a categorical predictor of RTs. We use linear mixed-effects models to simultaneously model subject and item random effects.
+
+
+#### Exposure
+A linear mixed effects model was fit to adjusted RTs for correct responses during the exposure phase. 
+
+Describe your fixed effects and random effects. Describe how each variable is coded.
+
+```{r exp1-byBlock-exposureRT, echo = TRUE}
+# Model specification:
+  # dependent variable: AdjustedRT
+  # independent variable: Block (the variable of interest)
+  #                       Condition (another variable of interest)
+  #                       WorkerID (random effect - subject)
+  #                       Word (random effect - item)
+                          
+# by-block analysis of RTs during EXPOSURE
+expo <- exp1 %>%
+  filter(Phase == "Exposure phase", CorrectResponse == "correct", Block == 1 | 2 | 3) %>%
+  select(WorkerId, Condition, Block, AdjustedRT, Word)
+expo$WorkerId <- as.factor(expo$WorkerId)
+expo$Word <- as.factor(expo$Word)
+
+modelexpo <- lmer(AdjustedRT ~ Block*Condition + (1 + Block|WorkerId) + (1 + Block + Condition|Word), data = expo)
+summary(modelexpo)
+contrasts(expo$Condition)
+```
+The result indicates that first of all, Block has a significant effect on the AdjustedRT during the exposure phase. Block 1, while holding everything else constant, has the longest estimated AdjustedRT, while Block 2 has a significantly lower, and Block 3 has a yet lower estimated AdjustedRT. This means that with the progress of the experiments, participants are in general responding more and more quickly. 
+
+Condition wise, since the Accented group is coded as -1, the negative beta indicates that the Accented group has a significantly longer RT compared to the Control group, when everything else is held constant. This means that in general, it is taking the Accented group longer time to respond, compared to the Controlled group. The interaction between Block and Condition is not significant though. 
+
+#### Test
+
+```{r exp1-byBlock-testRT, echo = TRUE}
+# Model specification:
+  # dependent variable: AdjustedRT
+  # independent variable: Condition (the variable of interest)
+  #                       Word (random effect - item)
+
+# by-block analysis of RTs during TEST 
+test <- exp1 %>%
+  filter(Phase == "Test phase", CorrectResponse == "correct") %>%
+  select(WorkerId, Condition, AdjustedRT, Word)
+expo$WorkerId <- as.factor(expo$WorkerId)
+expo$Word <- as.factor(expo$Word)
+
+modeltest <- lmer(AdjustedRT ~ Condition + (1 + Condition|Word), data = test)
+summary(modeltest)
+contrasts(expo$Condition)
+
+```
+The result indicates that Condition has a significant effect on the AdjustedRT in the test phase. More specifically, the accented group has an estimated AdjustedRT that is 95.28 (ms?) shorter than the controlled group. This means that the Accented group, after being exposed to accented speech, can react faster than Control group to accented speech produced by the same non-native speaker. 
+
+
