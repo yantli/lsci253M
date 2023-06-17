@@ -28,7 +28,7 @@ Participants are randomly split into two groups (Accent vs. Contro) and go throu
 In the Practice Phase, participants are familiarized with the task by listening to sentences produced by Native American English (AE) Talker 1. In the Exposure Phase, participants listens to either a) Mandarin accented Talker 1 (for Accent group), or b) Native AE Talker (for Control group) 2. In the Test Phase, all participants listen to Mandarin accented Talker 1. Finally, in the Baseline Phase, all participants listens to Native AE Talker 1 again. The purpose of this phase is to capture changes in performance due to task practice effect so inter-participant variability can be corrected.
 
 ```{r load-data}
-d.all <- read.csv(file = "data/xie_data_full.csv") %>%
+d.all <- read.csv(file = "../data/xie_data_full.csv") %>%
   select(PartOfExp, Trial, Filename, Word, Response, RT, WorkerId, Condition, List, Speaker, VisualProbeType, Error, CorrectResponse, Block, BaselineRT, ListOrder, ListID, Phase, subjMean_BlockRT, BaselineRT_raw) %>%
    filter(Condition %in% 
            c("Mandarin-accented English (same)",
@@ -110,7 +110,7 @@ ggplot(rt_dist, aes(x = Block, y = subjMean_BlockRT, fill = Block)) +
 
 The second step of outlier removal was to exclude trials with atypical RTs. Describe your exclusion criteria by trial and do a second round of exclusion.
 
-We want to identify and remove trials with exceptionally slow response times compared to the other trials in the same block because such trials might not be a result of a sudden interruption that is not related to the task. For each participant left in our dataset, we will look within each block and exclude trials with RT that is 3 standard deviation longer than the mean.
+We want to identify and remove trials with exceptionally slow response times compared to the other trials in the same block because such trials might not be a result of a sudden interruption that is not related to the task. For each participant left in our dataset, we will look within each block and exclude trials with RT that is 3 standard deviation longer than the mean. 
 
 ```{r outlier-removal-step2.1, echo = FALSE}
 d.all2 <- d.all[!(d.all$WorkerId %in% subjOutliers$WorkerId), ]
@@ -135,7 +135,7 @@ Since nothing got excluded according to the step above, this procedure did not a
 
 Q: Examine the mean RTs by block. Do they vary a lot before and after trial exclusion? Describe the effects.
 
-Since nothing got excluded according to the step above, this procedure did not have any effects on the mean RTs. (I am kind of confused by this result though - is this normal? I reconsidered my criteria, but still believe that each participants should be comparing with themselves, and within the same block only. I also think that we shouldn't go back and change our exclusion criteria just because it doesn't end up excluding anything, so I did not make a change here. However, this should be based on the fact that the original criteria makes sense, but I am not entirely sure if mine makes sense in the first place.)
+Since nothing got excluded according to the step above, this procedure did not have any effects on the mean RTs. (I am kind of confused by this result though - is this normal? I reconsidered my criteria, but still believe that each participants should be comparing with themselves, and within the same block only. I also think that we shouldn't go back and change our exclusion criteria just because it doesn't end up excluding anything, so I did not make a change here. However, this should be based on the fact that the original criteria makes sense, but I am not entirely sure if mine makes sense in the first place.) ## Yanting: to answer your question here, you are right one shouldn't revise the exclusion criteria just because no trials have been removed. That said, one reason why this exclusion does not end up being useful in this specific case could be that you haven't exluded the extreme RTs really. For instance, really small values (64ms) and really large values (24000ms) still existed in your data, which will inflate the computed SDs. If the SD was super large, then it is not surprising that nothing got excluded..
 
 
 ## Examine RTs and Accuracy during practice and baseline (after exclusion steps 1 and 2)
@@ -285,6 +285,7 @@ ggplot(exp1viz, aes(x = Block, y = meanAdj_BlockRT, color = Condition, group = C
   scale_color_discrete(labels = c("Control Group", "Accent Group")) +
   labs(x = "Block", y = "mean adjusted RT per block")
 
+## Yanting: consider add confidence intervals to the plots?
 ```
 
 We assess the effect of exposure condition (Mandarin-accented English vs. control) on processing speed separately for RTs during the exposure phase and the test phase. To assess the _change_ in RTs during the course of exposure, we split the 18-trial exposure phase into three blocks of 6 trials and use the resulting Block variable as a categorical predictor of RTs. We use linear mixed-effects models to simultaneously model subject and item random effects.
@@ -338,6 +339,6 @@ summary(modeltest)
 contrasts(expo$Condition)
 
 ```
-The result indicates that Condition has a significant effect on the AdjustedRT in the test phase. More specifically, the accented group has an estimated AdjustedRT that is 95.28 (ms?) shorter than the controlled group. This means that the Accented group, after being exposed to accented speech, can react faster than Control group to accented speech produced by the same non-native speaker. 
+The result indicates that Condition has a significant effect on the AdjustedRT in the test phase. More specifically, the accented group has an estimated AdjustedRT that is 95.28 (ms?) shorter than the controlled group. This means that the Accented group, after being exposed to accented speech, can react faster than Control group to accented speech produced by the same non-native speaker. ## Yanting: pay attention to how the variable 'Condition' is coded. Because Control = 1 and Accent = -1, the coefficient beta (95.28) from the mixed effects model actually is one half of the distance between Control and Accent. You can verify that by looking at the average RTs of the two conditions. If you code the Condition as Control = 0.5 and Accent = -0.5 (rescaling the contrast), then your interpretation of the beta value would be correct.
 
 
